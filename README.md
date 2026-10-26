@@ -39,6 +39,32 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+1. **The route — `POST /submit` in `app.py`.** The JSON body arrives and Flask
+   turns it into a dict. *Adds:* a place for the request to land. In unit 8 the
+   rate limiter checks the caller here, before anything else runs.
+2. **Validation — also in the route.** Checks that `text` is a string, isn't
+   blank, is long enough to score and isn't too long, and that `creator_id` is
+   there. A bad request gets a 400 or 413 with a reason and is logged as a
+   rejection. *Adds:* a guarantee that everything below gets text it can
+   score, so bad input gets an answer instead of crashing the service with a 500.
+3. **Signal one — `detector.model_signal`.** gpt2 reads the first 400 tokens
+   (about 300 words) and measures how predictable they are. *Adds:*
+   `model_score`, 0–1, where higher means more AI-like.
+4. **Signal two — `stylometry.style_signal`.** Measures the shape of the text:
+   how much sentence length varies, how varied the vocabulary is, and how
+   punctuation is used. *Adds:* `style_score`, 0–1, same direction.
+5. **The combining rule — `scoring.combine_signals`.** *Adds:* one combined
+   score from the two signals, and decides what happens when they disagree.
+6. **The label mapping — `scoring.score_to_label`.** *Adds:* the `guess`
+   (`ai` / `unsure` / `human`) and the sentence a person actually reads.
+7. **The record — `audit.log_decision`, then the response.** The route gives
+   the submission a `content_id` and writes all nine fields to
+   `logs/audit.jsonl`. Then it replies with the label, both signal scores and
+   the `content_id`. *Adds:* a permanent trace, and the one handle the writer
+   needs to appeal.
+
+The full request and response contract, plus the false-positive trace, is in
+[design.md](design.md).
 
 
 ---
@@ -53,19 +79,45 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** Predictability. gpt2 computes the perplexity of the
+first 400 tokens, meaning how surprised it is by each next word on average.
+That number is squashed onto 0–1, with perplexity 45 landing at 0.5. Lower
+perplexity gives a higher score, which means more AI-like.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** A language model
+writes by picking a likely next word again and again, so its output is text
+that models find easy to predict. People make odd word choices, take abrupt
+turns and reach for specific details, all of which a model doesn't expect.
 
-**What it can't see:**
+**What it can't see:** Who wrote the text. It measures how *ordinary* the
+words are, not where they came from. Plain human writing in common words and
+short sentences scores like machine text. A plainly written paragraph scored
+**0.86** and a textbook AI paragraph scored **0.89**, almost the same. That
+puts second-language writers, younger writers and anyone writing plainly on
+purpose at risk. It fails the other way too: ornate prose full of rare words
+scored **0.08** (perplexity 212), so AI text prompted to sound "literary" can
+pass as human. It also never reads past the first ~300 words, so anything
+after that has no effect on the score.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text without reading it. That means how
+much sentence length varies (spread relative to the mean), how much of the
+vocabulary repeats (type-token ratio), and how much varied punctuation is used
+(semicolons, dashes, commas per word).
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** "Most likely next
+word" averages out to even, mid-length sentences, safe vocabulary and tidy
+punctuation. Human writing is lumpier: a three-word sentence sits next to a
+forty-word one, with a dash or a fragment thrown in.
 
-**What it can't see:**
+**What it can't see:** Meaning. It reacts to surface changes that leave the
+content alone. Typos, chopping sentences up, a pasted quotation or an extra
+dash all move it, and any of those costs an attacker seconds. It is also
+thrown off by length, because type-token ratio falls as text gets longer, so
+long and short submissions aren't directly comparable. Plain writers get hit
+here too, since even sentences and repeated common words look "AI-shaped" to
+both signals at once.
 
 ### The combining rule
 
