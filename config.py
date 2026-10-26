@@ -50,12 +50,18 @@ DETECTOR_MAX_TOKENS = 400
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
 #
-# ⚠️ These are placeholders. Milestone 4 asks you to write your combining rule
-# down BEFORE you code it, and to put the numbers in your README. Whatever you
-# decide, it goes here.
+# Equal weights: each signal's blind spot lands on different writers (plain
+# prose for the model, reshaped text for style), so neither is trusted more.
 
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
+
+# When the two signals differ by more than this, they're treated as a split
+# and the combined score is held between SPLIT_FLOOR and SPLIT_CEILING. Both
+# must sit inside the unsure band below, or a split could still be labelled.
+DISAGREEMENT_GAP = 0.30
+SPLIT_FLOOR = 0.40
+SPLIT_CEILING = 0.60
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────

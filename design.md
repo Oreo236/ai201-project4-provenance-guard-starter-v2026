@@ -38,6 +38,13 @@ It gets worse once signal two is built. Even sentence lengths and repeated
 common words are exactly what it treats as AI-shaped. Her `style_score` is
 likely to land *above* 0.5, so both signals would agree that she's a machine.
 
+> **Update after Milestone 4:** with signal two built, her paragraph scores
+> style **0.52**. A straight average would give 0.69, still labelled AI. The
+> two signals are 0.34 apart, though, so the combining rule's split check holds
+> her at **0.60, unsure**. She is no longer called AI, but she is still told
+> the system isn't sure about her own work. That's why the unsure label has to
+> be written for her.
+
 **What the label says to her.** Right now it's a placeholder. Whatever it
 becomes, a high-confidence AI label tells her that her own work is suspected of
 being fake, and the decision is wrong. Nothing in the response tells her *why*,

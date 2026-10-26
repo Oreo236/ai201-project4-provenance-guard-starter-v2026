@@ -97,14 +97,31 @@ puts second-language writers, younger writers and anyone writing plainly on
 purpose at risk. It fails the other way too: ornate prose full of rare words
 scored **0.08** (perplexity 212), so AI text prompted to sound "literary" can
 pass as human. It also never reads past the first ~300 words, so anything
-after that has no effect on the score.
+after that has no effect on the score. And it can't tell "a machine wrote
+this" from "gpt2 has read this before". The Gettysburg Address scored **0.73**,
+almost certainly because the famous speech was in gpt2's training data, so
+quoting famous human writing looks like AI.
 
 ### Signal two — the style signal
 
-**What it measures:** The shape of the text without reading it. That means how
-much sentence length varies (spread relative to the mean), how much of the
-vocabulary repeats (type-token ratio), and how much varied punctuation is used
-(semicolons, dashes, commas per word).
+**What it measures:** The shape of the text without reading it, using two
+measures:
+
+- **Sentence-length spread**, worth 0.6 of the signal. This is the standard
+  deviation of sentence lengths divided by the mean. A spread of 0.25 or less
+  reads fully AI-like and 0.65 or more reads fully human-like. Two-sentence
+  texts keep only a third of their pull and one-sentence texts score a neutral
+  0.5, because a spread from so few sentences means little.
+- **Punctuation**, worth 0.4. This counts every mark except full stops, per
+  word, and scores how close the text sits to AI's typical rate of about 0.05.
+  It is *not* "more punctuation = more human". My casual pieces used 0.00–0.03
+  marks per word, formal human prose used 0.08, and AI sat in between. So being
+  far from typical in *either* direction reads as human.
+
+Type-token ratio is computed (`type_token_ratio`, averaged over 25-word
+windows) but gets no vote. On my test texts it tracked length more than
+authorship. AI text also had *more* varied vocabulary (0.77–0.91) than formal
+human prose (0.63–0.69), the opposite of the theory.
 
 **Why that might differ between human and AI writing:** "Most likely next
 word" averages out to even, mid-length sentences, safe vocabulary and tidy
@@ -117,24 +134,74 @@ dash all move it, and any of those costs an attacker seconds. It is also
 thrown off by length, because type-token ratio falls as text gets longer, so
 long and short submissions aren't directly comparable. Plain writers get hit
 here too, since even sentences and repeated common words look "AI-shaped" to
-both signals at once.
+both signals at once. The punctuation measure in particular can be moved
+either way just by adding or deleting commas.
 
 ### The combining rule
 
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** Average the two signals, weighted equally. But if they disagree
+by more than 0.30, hold the result between 0.40 and 0.60, inside the unsure
+band. Two methods disagreeing is genuine uncertainty, so neither label can be
+reached on one signal's say-so. That matters most for the writer signal one
+misreads, someone whose plain or familiar-sounding text scores high on the
+model but whose writing doesn't have AI's shape.
 
-**The numbers:**
+**The numbers** (all in `config.py`):
+
+| Setting | Value |
+|---|---|
+| `WEIGHT_MODEL_SIGNAL` / `WEIGHT_STYLE_SIGNAL` | 0.5 / 0.5 |
+| `DISAGREEMENT_GAP` | 0.30 |
+| `SPLIT_FLOOR` / `SPLIT_CEILING` | 0.40 / 0.60 |
+| `HUMAN_THRESHOLD` / `AI_THRESHOLD` | 0.35 / 0.65 (unchanged, until Milestone 5) |
+
+The weights are equal because each signal's blind spot lands on different
+writers: plain writers for the model, anyone reshaping text for style.
+Neither has earned more trust.
 
 **Where it lives:** `scoring.py::combine_signals`
 
 <!-- ⚠️ The grader checks your code against that line. If your rule lives
      somewhere else, say where. -->
 
+**The four calibration inputs, plus my own pieces:**
+
+| Input | model | style | combined | Lands in |
+|---|---|---|---|---|
+| Clearly AI (starter sample) | 0.886 | 0.801 | 0.844 | AI |
+| Clearly AI (generated essay) | 0.813 | 0.681 | 0.747 | AI |
+| Clearly human (my piece 1) | 0.259 | 0.375 | 0.317 | human |
+| Clearly human (my piece 2) | 0.261 | 0.293 | 0.277 | human |
+| Formal human (Gettysburg Address) | 0.727 | 0.349 | 0.538 | unsure |
+| Formal human (Darwin, *Origin of Species*) | 0.685 | 0.417 | 0.551 | unsure |
+| Lightly-edited AI (essay with contractions, shorter sentences) | 0.709 | 0.756 | 0.732 | AI |
+
+Both formal human texts would have been flagged as AI on signal one alone.
+Signal two is what pulls them back to unsure. The lightly-edited AI stays
+caught, because adding contractions didn't change its even sentence lengths or
+its middle-of-the-road punctuation.
+
+These cutoffs (0.25 / 0.65 spread, 0.05 ± 0.03 punctuation) were tuned on
+these few texts, so they will fit them better than they fit anything new.
+Unit 8's attack set is the honest test.
+
 **A case where my two signals split, and what my rule does with it:**
 
+The Gettysburg Address. Signal one says **0.73** (AI-like): gpt2 finds it
+easy to predict, almost certainly because it has read it. Signal two says
+**0.35** (human-like): sentences of 30, 24, 11, 27 and 11 words, and heavy
+punctuation. They're 0.38 apart, past the 0.30 gap, so the rule holds the
+score inside 0.40–0.60. It lands at **0.538, unsure**. A straight average
+happens to land there too.
+
+Where the rule actually changes the outcome is the plain-writing paragraph
+from the false-positive trace in [design.md](design.md). Model **0.86**,
+style **0.52**, 0.34 apart. A straight average gives 0.69, which would be
+labelled **AI**. The rule caps it at **0.60, unsure**. That's the writer this
+rule exists for.
 
 
 ---
