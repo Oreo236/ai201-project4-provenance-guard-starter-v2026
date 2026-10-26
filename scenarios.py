@@ -30,7 +30,10 @@ SCENARIOS = [
         # things you actually wrote. This is the criterion that matters most and
         # it's meaningless with someone else's prose.
         "texts": [
-            "REPLACE ME with a paragraph you wrote yourself.",
+            # 1 (plain)
+            """This weekend I went back home to celebrate a friends of mines birthday. So we just went to several restaurants and I showed her around my city since she is not from there""",
+            # 2 (plain)
+            """i am honesly sooo tired rn. I was meant to be asleep by now but I have two assessments to complete before I can officially go to bed but thankfully my class starts at 10:10 am""",
             "REPLACE ME with another one. Ten pieces is the usual number.",
         ],
     },
