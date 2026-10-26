@@ -236,27 +236,26 @@ def submit():
 
     style_score = stylometry.style_signal(text)
     combined = scoring.combine_signals(model_score, style_score)
+    guess, label = scoring.score_to_label(combined)
     content_id = uuid.uuid4().hex
 
-    # Milestone 4: guess and label are placeholders until the label mapping
-    # (Milestone 5) exists.
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
-        guess="pending",
+        guess=guess,
         model_score=model_score,
         style_score=style_score,
         combined_score=combined,
-        label="PLACEHOLDER",
+        label=label,
         status="decided",
     )
 
     return jsonify({
         "content_id": content_id,
         "creator_id": creator_id,
-        "guess": "pending",
+        "guess": guess,
         "confidence": combined,
-        "label": "PLACEHOLDER",
+        "label": label,
         "model_score": model_score,
         "style_score": style_score,
         "status": "decided",
@@ -293,14 +292,47 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject("unknown", 400, "invalid_json",
+                       "Send a JSON object with \"content_id\" and \"reasoning\".")
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+    if not isinstance(content_id, str) or not content_id.strip():
+        return _reject("unknown", 400, "missing_content_id",
+                       "\"content_id\" is missing — it's in the response you got when you submitted.")
+    content_id = content_id.strip()
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return _reject("unknown", 400, "missing_reasoning",
+                       "Tell us why you think the result is wrong in \"reasoning\".")
+    reasoning = reasoning.strip()
+    if len(reasoning) > MAX_REASONING_CHARS:
+        return _reject("unknown", 413, "reasoning_too_long",
+                       f"Reasoning can be at most {MAX_REASONING_CHARS:,} characters.")
+
+    history = audit.entries_for(content_id)
+    decision = next((e for e in history if e.get("status") == "decided"), None)
+    if decision is None:
+        return _reject("unknown", 404, "unknown_content_id",
+                       "We have no submission with that content_id. Check it was copied exactly.")
+    if any(e.get("event") == "appeal" for e in history):
+        return _reject(decision["creator_id"], 409, "already_under_review",
+                       "This piece has already been appealed and is under review.")
+
+    # The creator comes from the original decision, never from the caller.
+    audit.log_appeal(content_id=content_id, creator_id=decision["creator_id"],
+                     reasoning=reasoning)
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "original_guess": decision.get("guess"),
+        "message": "Your appeal has been recorded. This piece is now marked as under review.",
+    })
+
+
+MAX_REASONING_CHARS = 5_000
 
 
 # ── Already works ─────────────────────────────────────────────────────────────

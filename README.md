@@ -215,14 +215,31 @@ rule exists for.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.35 | We think this was most likely written by a person. |
+| unsure | above 0.35, below 0.65 | We can't tell whether this was written by a person or with AI, so we're not making a call either way. A lot of people's own writing lands here, and this is not an accusation. If you wrote this yourself and want someone to take another look, you can appeal. |
+| high-confidence AI | 0.65 – 1.00 | Our checks suggest this was probably written with AI. These checks can be wrong, especially about plain, simple writing. If you wrote this yourself, please appeal and tell us how you wrote it. Your work will be marked for review. |
+
+A score of exactly 0.35 counts as human and exactly 0.65 counts as AI
+(`scoring.py::score_to_label`). All three are reachable. The Sample Run below
+shows a real submission producing each one.
 
 **Why I worded the "unsure" one this way:**
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
      written every word themselves. -->
+
+The person most likely to see it is someone like the writer in my
+false-positive trace: they wrote every word, in plain sentences, and the two
+checks disagreed about them. So the label says the uncertainty is *ours*
+("we can't tell"), not something wrong with their work. It says outright that
+it isn't an accusation, and it tells them that a lot of people's own writing
+lands here, so they don't read it as being singled out. It ends with what they
+can do.
+
+The AI label also mentions plain writing by name, because that's the specific
+way these checks fail. Neither label promises that a *person* will review an
+appeal, because nothing in this service assigns one. "Marked for review" is
+what actually happens.
 
 
 
@@ -240,40 +257,26 @@ rule exists for.
      two off the response, so leaving them out costs you next unit's
      diagnostics. -->
 
+This is the plain-writing paragraph from the false-positive trace. The two
+signals split (0.86 vs 0.52), so the combining rule holds it at 0.60, unsure,
+where a straight average would have said AI.
+
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "This weekend I went back home to celebrate a friends of mines birthday. So we just went to several restaurants and I showed her around my city since she is not from there", "creator_id": "oreoluwa"}'
+  -d '{"text": "I moved here two years ago for work. At first it was hard. I did not know many people and the winters are very cold. Now I have friends from my job and I like my apartment. On weekends I go to the market and I cook for my family. I think this city is a good place to live.", "creator_id": "amara"}'
 ```
 
 ```json
 {
-  "confidence": null,
-  "content_id": "5808bd8b49fb4c6dba7582bc0368f6e1",
-  "creator_id": "oreoluwa",
-  "guess": "pending",
-  "label": "PLACEHOLDER",
-  "model_score": 0.2587,
+  "confidence": 0.6,
+  "content_id": "dc9ac9e68e144356be4ddf199827d7ae",
+  "creator_id": "amara",
+  "guess": "unsure",
+  "label": "We can't tell whether this was written by a person or with AI, so we're not making a call either way. A lot of people's own writing lands here, and this is not an accusation. If you wrote this yourself and want someone to take another look, you can appeal.",
+  "model_score": 0.8627,
   "status": "decided",
-  "style_score": null
-}
-```
-
-<!-- Milestone 3 run: only signal one is wired in. confidence, guess, label
-     and style_score are placeholders until Milestones 4 and 5. -->
-
-**A refused submission** (too short to score)
-
-```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "too short", "creator_id": "oreoluwa"}'
-```
-
-```json
-{
-  "error": "text_too_short",
-  "message": "Send at least 20 words — shorter text can't be scored reliably."
+  "style_score": 0.5201
 }
 ```
 
@@ -282,14 +285,22 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+  -d '{"content_id": "dc9ac9e68e144356be4ddf199827d7ae", "reasoning": "I wrote this myself about moving to a new city. I write in simple English because it is my second language."}'
 ```
 
 ```json
-
+{
+  "content_id": "dc9ac9e68e144356be4ddf199827d7ae",
+  "message": "Your appeal has been recorded. This piece is now marked as under review.",
+  "original_guess": "unsure",
+  "status": "under_review"
+}
 ```
 
 **What the log shows afterwards**
+
+The original decision stays exactly as it was, and the appeal sits right
+after it with the new status.
 
 ```bash
 $ curl "http://127.0.0.1:5000/log?limit=2"
@@ -300,30 +311,47 @@ $ curl "http://127.0.0.1:5000/log?limit=2"
   "count": 2,
   "entries": [
     {
-      "combined_score": null,
-      "content_id": "5808bd8b49fb4c6dba7582bc0368f6e1",
-      "creator_id": "oreoluwa",
-      "guess": "pending",
-      "label": "PLACEHOLDER",
-      "model_score": 0.2587,
+      "combined_score": 0.6,
+      "content_id": "dc9ac9e68e144356be4ddf199827d7ae",
+      "creator_id": "amara",
+      "guess": "unsure",
+      "label": "We can't tell whether this was written by a person or with AI, so we're not making a call either way. A lot of people's own writing lands here, and this is not an accusation. If you wrote this yourself and want someone to take another look, you can appeal.",
+      "model_score": 0.8627,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-10-26T06:53:34+00:00"
+      "style_score": 0.5201,
+      "timestamp": "2026-10-26T06:58:41+00:00"
     },
     {
-      "creator_id": "oreoluwa",
-      "event": "rejected",
-      "http_status": 400,
-      "reason": "text_too_short",
-      "status": "rejected",
-      "timestamp": "2026-10-26T06:53:34+00:00"
+      "content_id": "dc9ac9e68e144356be4ddf199827d7ae",
+      "creator_id": "amara",
+      "event": "appeal",
+      "reasoning": "I wrote this myself about moving to a new city. I write in simple English because it is my second language.",
+      "status": "under_review",
+      "timestamp": "2026-10-26T06:58:47+00:00"
     }
   ]
 }
 ```
 
-<!-- Milestone 3 run. Re-run after the appeal is built (Milestone 5) so this
-     shows the appeal entry too. -->
+**The other two labels, reached with real submissions**
+
+| Text | model | style | confidence | guess |
+|---|---|---|---|---|
+| A generated essay on remote work | 0.8133 | 0.6814 | 0.7473 | `ai` |
+| My own piece 1 (a weekend at home) | 0.2587 | 0.375 | 0.3168 | `human` |
+
+**Bad requests get a reason, not a crash**
+
+| Request | Status | `error` |
+|---|---|---|
+| `/submit` with `"text": "too short"` | 400 | `text_too_short` |
+| `/submit` with no `text` | 400 | `missing_text` |
+| `/submit` with a JSON list as the body | 400 | `invalid_json` |
+| `/submit` with 50,000 words | 413 | `text_too_long` |
+| `/appeal` on an already-appealed id | 409 | `already_under_review` |
+| `/appeal` with a made-up id | 404 | `unknown_content_id` |
+
+Every one of these also leaves a `rejected` entry in the audit log.
 
 ---
 
