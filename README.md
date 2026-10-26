@@ -176,11 +176,38 @@ both signals at once.
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "This weekend I went back home to celebrate a friends of mines birthday. So we just went to several restaurants and I showed her around my city since she is not from there", "creator_id": "oreoluwa"}'
 ```
 
 ```json
+{
+  "confidence": null,
+  "content_id": "5808bd8b49fb4c6dba7582bc0368f6e1",
+  "creator_id": "oreoluwa",
+  "guess": "pending",
+  "label": "PLACEHOLDER",
+  "model_score": 0.2587,
+  "status": "decided",
+  "style_score": null
+}
+```
 
+<!-- Milestone 3 run: only signal one is wired in. confidence, guess, label
+     and style_score are placeholders until Milestones 4 and 5. -->
+
+**A refused submission** (too short to score)
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/submit \
+  -H "Content-Type: application/json" \
+  -d '{"text": "too short", "creator_id": "oreoluwa"}'
+```
+
+```json
+{
+  "error": "text_too_short",
+  "message": "Send at least 20 words — shorter text can't be scored reliably."
+}
 ```
 
 **An appeal**
@@ -198,12 +225,38 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 **What the log shows afterwards**
 
 ```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+$ curl "http://127.0.0.1:5000/log?limit=2"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "5808bd8b49fb4c6dba7582bc0368f6e1",
+      "creator_id": "oreoluwa",
+      "guess": "pending",
+      "label": "PLACEHOLDER",
+      "model_score": 0.2587,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-26T06:53:34+00:00"
+    },
+    {
+      "creator_id": "oreoluwa",
+      "event": "rejected",
+      "http_status": 400,
+      "reason": "text_too_short",
+      "status": "rejected",
+      "timestamp": "2026-10-26T06:53:34+00:00"
+    }
+  ]
+}
 ```
+
+<!-- Milestone 3 run. Re-run after the appeal is built (Milestone 5) so this
+     shows the appeal entry too. -->
 
 ---
 

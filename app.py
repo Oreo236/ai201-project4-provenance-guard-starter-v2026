@@ -199,17 +199,72 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    import detector
 
-    # TODO: delete this and build the route.
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject("unknown", 400, "invalid_json",
+                       "Send a JSON object with \"text\" and \"creator_id\".")
+
+    creator_id = payload.get("creator_id")
+    creator_for_log = creator_id if isinstance(creator_id, str) and creator_id.strip() else "unknown"
+    text = payload.get("text")
+
+    # Checked in the order design.md lists them, so the first problem wins.
+    if text is None:
+        return _reject(creator_for_log, 400, "missing_text", "The \"text\" field is missing.")
+    if not isinstance(text, str):
+        return _reject(creator_for_log, 400, "text_not_string", "\"text\" has to be a string.")
+    text = text.strip()
+    if len(text.split()) < MIN_WORDS:
+        return _reject(creator_for_log, 400, "text_too_short",
+                       f"Send at least {MIN_WORDS} words — shorter text can't be scored reliably.")
+    if len(text) > MAX_CHARS:
+        return _reject(creator_for_log, 413, "text_too_long",
+                       f"Text can be at most {MAX_CHARS:,} characters.")
+    if creator_for_log == "unknown" or len(creator_id) > 64:
+        return _reject(creator_for_log, 400, "missing_creator_id",
+                       "\"creator_id\" has to be a non-blank string of at most 64 characters.")
+
+    try:
+        model_score = detector.model_signal(text)
+    except detector.DetectorUnavailable:
+        return _reject(creator_id, 503, "detector_unavailable",
+                       "The detector model isn't loaded. Try again shortly.")
+
+    content_id = uuid.uuid4().hex
+
+    # Milestone 3: guess, confidence, label and style_score are placeholders
+    # until signal two (Milestone 4) and the label mapping (Milestone 5) exist.
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess="pending",
+        model_score=model_score,
+        label="PLACEHOLDER",
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "creator_id": creator_id,
+        "guess": "pending",
+        "confidence": None,
+        "label": "PLACEHOLDER",
+        "model_score": model_score,
+        "style_score": None,
+        "status": "decided",
+    })
+
+
+MIN_WORDS = 20
+MAX_CHARS = 20_000
+
+
+def _reject(creator_id, status_code, error, message):
+    """Refuse a request, leaving a trace in the audit log."""
+    audit.log_rejection(creator_id=creator_id, reason=error, http_status=status_code)
+    return jsonify({"error": error, "message": message}), status_code
 
 
 @app.post("/appeal")
