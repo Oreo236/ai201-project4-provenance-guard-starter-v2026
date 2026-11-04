@@ -441,19 +441,118 @@ whose work got caught by it:
 
 <!-- Your five criteria across three trials. `run_eval.py --label before`. -->
 
+`python run_eval.py --label before` → `results/run_2026-11-04_1759_before.md`.
+Scenarios are in `scenarios.py`. I extended `run_eval.py` so criterion 4
+appeals every submission it gets back (plus one made-up id), and so every
+request records the audit-log entries it left behind, which criterion 5 needs.
+
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. Real writers don't get accused | 0 of 10 labelled AI | 0/10 | 0/10 | 0/10 | MET |
+| 2. AI and human text land far apart | AI mean ≥ 0.30 above human mean | +0.3012 | +0.3012 | +0.3012 | MET (by 0.0012) |
+| 3. All three labels reachable | ai, human, unsure each ≥ 1 | 3/3 | 3/3 | 3/3 | MET |
+| 4. Every appeal recorded and changes status | 10/10 real, fake id → 404 | 10/10, 404 | 10/10, 404 | 10/10, 404 | MET |
+| 5. Bad input never crashes | 0 of 6 are 5xx, each logged | 0 5xx, 6/6 logged | 0 5xx, 6/6 logged | 0 5xx, 6/6 logged | MET |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All three trials were identical, number for number, as expected: neither
+signal has any randomness in it.
+
+**How I decided each verdict:**
+
+1. No piece of my writing came back `ai` in any trial. Six were `human` and
+   four were `unsure`. The closest was my relocation sentence at 0.4869
+   (model 0.67).
+2. The AI set averaged 0.6412 and my set 0.3400, a gap of 0.3012. That holds,
+   but only just. Three of the five AI essays didn't come back `ai`: they
+   scored exactly 0.60, `unsure`. Signal one gave them 0.86–0.92, signal two
+   gave them 0.60, and that gap of more than 0.30 triggered my split rule,
+   which capped them at 0.60.
+3. The remote-work essay was `ai` (0.6842), my weekend piece `human` (0.3168)
+   and the Gettysburg Address `unsure` (0.5382), in every trial.
+4. All 10 appeals per trial returned 200 with `under_review`, and each content
+   id had exactly one appeal entry afterwards. The made-up id returned 404 with
+   zero appeal entries.
+5. Every malformed body got the 4xx code design.md names for it (empty text →
+   400 `text_too_short`, missing or null text → 400 `missing_text`, a number →
+   400 `text_not_string`, 50,000 words → 413 `text_too_long`, a JSON list →
+   400 `invalid_json`), and each left exactly one `rejected` entry.
+
+**Real output from trial 1**, produced by `run_eval.py::main` (submissions)
+and `run_eval.py::send_appeal` (appeals). `sent` is truncated by the script.
+
+Criterion 1, my closest call:
 
 ```json
+{
+  "status": 200,
+  "content_id": "961f80f19241467a836dd2ca59da8787",
+  "guess": "unsure",
+  "confidence": 0.4869,
+  "model_score": 0.6738,
+  "style_score": 0.3,
+  "label": "We can't tell whether this was written by a person or with AI, so we're not making a call either way. A lot of people's own writing lands here, and this is not an accusation. If you wrote this yourself and want someone to take another look, you can appeal.",
+  "error": null,
+  "sent": "I am based in New York, NY but if I am selected for a San Fr",
+  "logged": [{"status": "decided", "guess": "unsure", "combined_score": 0.4869}]
+}
+```
 
+Criterion 2, an AI essay the split rule held at unsure:
+
+```json
+{
+  "status": 200,
+  "content_id": "c438cf750ac14d40884d0bafe43a8fc0",
+  "guess": "unsure",
+  "confidence": 0.6,
+  "model_score": 0.92,
+  "style_score": 0.6,
+  "label": "We can't tell whether this was written by a person or with AI, so we're not making a call either way. A lot of people's own writing lands here, and this is not an accusation. If you wrote this yourself and want someone to take another look, you can appeal.",
+  "error": null,
+  "sent": "Regular exercise plays a crucial role in maintaining both ph",
+  "logged": [{"status": "decided", "guess": "unsure", "combined_score": 0.6}]
+}
+```
+
+Criterion 3, the three labels:
+
+```json
+[
+  {"status": 200, "content_id": "33d7fce316b3427db88638626c633330", "guess": "ai", "confidence": 0.6842, "model_score": 0.7683, "style_score": 0.6, "sent": "Remote work has fundamentally transformed the modern workpla"},
+  {"status": 200, "content_id": "91971349223949ed89bf7686ff922e8f", "guess": "human", "confidence": 0.3168, "model_score": 0.2587, "style_score": 0.375, "sent": "This weekend I went back home to celebrate a friends of mine"},
+  {"status": 200, "content_id": "a50b3b6c9721482e8eef7ed67b1ff3c0", "guess": "unsure", "confidence": 0.5382, "model_score": 0.7273, "style_score": 0.3491, "sent": "Four score and seven years ago our fathers brought forth on "}
+]
+```
+
+(`label`, `error` and `logged` left out of these three for length; they're in
+the results file.)
+
+Criterion 4, a real appeal and the made-up one:
+
+```json
+[
+  {
+    "status": 200,
+    "content_id": "c221aa7c3f62433db8006061174a25d3",
+    "guess": "ai",
+    "confidence": 0.6842,
+    "sent": "Remote work has fundamentally transformed the modern workpla",
+    "appeal": {"status": 200, "new_status": "under_review", "appeal_entries": 1}
+  },
+  {
+    "sent": "appeal with a made-up content_id",
+    "appeal": {"status": 404, "new_status": null, "appeal_entries": 0}
+  }
+]
+```
+
+Criterion 5, two of the six:
+
+```json
+[
+  {"status": 400, "error": "text_too_short", "sent": "(empty text)", "logged": [{"event": "rejected", "status": "rejected", "reason": "text_too_short", "http_status": 400}]},
+  {"status": 400, "error": "invalid_json", "sent": "[\"a\", \"JSON\", \"list\", \"instead\", \"of\", \"an\", \"object\"]", "logged": [{"event": "rejected", "status": "rejected", "reason": "invalid_json", "http_status": 400}]}
+]
 ```
 
 **Diagnoses**
