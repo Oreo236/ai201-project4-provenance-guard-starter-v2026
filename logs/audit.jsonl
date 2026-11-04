@@ -26,3 +26,12 @@
 {"timestamp": "2026-11-04T22:47:47+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 {"timestamp": "2026-11-04T22:47:47+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 {"timestamp": "2026-11-04T22:47:55+00:00", "creator_id": "m1_check", "event": "rejected", "status": "rejected", "reason": "missing_text", "http_status": 400}
+{"timestamp": "2026-11-04T22:49:45+00:00", "content_id": "e2a5efac6c82485f891783ad5739ce8a", "creator_id": "eval_appeal path_1", "guess": "ai", "model_score": 0.7683, "style_score": 0.6, "combined_score": 0.6842, "label": "Our checks suggest this was probably written with AI. These checks can be wrong, especially about plain, simple writing. If you wrote this yourself, please appeal and tell us how you wrote it. Your work will be marked for review.", "status": "decided"}
+{"timestamp": "2026-11-04T22:49:45+00:00", "content_id": "e2a5efac6c82485f891783ad5739ce8a", "creator_id": "eval_appeal path_1", "event": "appeal", "status": "under_review", "reasoning": "I wrote this myself. (run_eval.py appeal check)"}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "unknown_content_id", "http_status": 404}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "eval_bad_empty", "event": "rejected", "status": "rejected", "reason": "text_too_short", "http_status": 400}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "eval_bad_missing", "event": "rejected", "status": "rejected", "reason": "missing_text", "http_status": 400}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "eval_bad_null", "event": "rejected", "status": "rejected", "reason": "missing_text", "http_status": 400}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "eval_bad_number", "event": "rejected", "status": "rejected", "reason": "text_not_string", "http_status": 400}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "eval_bad_huge", "event": "rejected", "status": "rejected", "reason": "text_too_long", "http_status": 413}
+{"timestamp": "2026-11-04T22:49:45+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "invalid_json", "http_status": 400}

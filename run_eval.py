@@ -27,6 +27,7 @@ import json
 import sys
 from pathlib import Path
 
+import audit
 import config
 
 # Windows consoles often run a codepage that can't print every character in
@@ -58,9 +59,40 @@ def bodies_for(scenario):
     ]
 
 
+FAKE_CONTENT_ID = "0" * 32
+
+
+def _log_summary(entry):
+    """The parts of a log entry a verdict turns on."""
+    keys = ("event", "status", "reason", "http_status", "guess", "combined_score")
+    return {k: entry[k] for k in keys if k in entry}
+
+
+def send_appeal(requests, args, content_id):
+    """
+    Appeal one content_id, then count the appeal entries the log holds for it.
+
+    Criterion 4: a real id gets 200 + under_review and exactly one appeal
+    entry; a made-up one gets 404 and none.
+    """
+    try:
+        response = requests.post(
+            f"{args.url}/appeal",
+            json={"content_id": content_id,
+                  "reasoning": "I wrote this myself. (run_eval.py appeal check)"},
+            timeout=args.timeout,
+        )
+        payload = response.json() if response.content else {}
+        status, new_status = response.status_code, payload.get("status")
+    except Exception as exc:  # noqa: BLE001
+        status, new_status = None, f"{type(exc).__name__}: {exc}"
+    appeals = [e for e in audit.entries_for(content_id) if e.get("event") == "appeal"]
+    return {"status": status, "new_status": new_status, "appeal_entries": len(appeals)}
+
+
 def describe(body):
     """A short, readable note of what was sent — for the report."""
-    if set(body) == {"text", "creator_id"} and isinstance(body.get("text"), str):
+    if isinstance(body, dict) and set(body) == {"text", "creator_id"} and isinstance(body.get("text"), str):
         text = body["text"]
         return text[:70] if text else "(empty text)"
     return json.dumps(body)[:120]
@@ -115,22 +147,39 @@ def main():
             results = []
             for i, body in enumerate(bodies_for(scenario), 1):
                 preview = describe(body)
+                before = len(audit.read_entries())
                 try:
                     response = requests.post(f"{args.url}/submit", json=body,
                                              timeout=args.timeout)
                     payload = response.json() if response.content else {}
-                    results.append({
+                    if not isinstance(payload, dict):
+                        payload = {}
+                    result = {
                         "status": response.status_code,
+                        "content_id": payload.get("content_id"),
                         "guess": payload.get("guess"),
                         "confidence": payload.get("confidence"),
                         "model_score": payload.get("model_score"),
                         "style_score": payload.get("style_score"),
                         "label": payload.get("label"),
+                        "error": payload.get("error"),
                         "sent": preview,
-                    })
+                    }
                 except Exception as exc:  # noqa: BLE001
-                    results.append({"status": None, "error": f"{type(exc).__name__}: {exc}",
-                                    "sent": preview})
+                    result = {"status": None, "error": f"{type(exc).__name__}: {exc}",
+                              "sent": preview}
+                # What this one request left in the audit log — criterion 5 asks
+                # that every refusal leaves a `rejected` entry.
+                result["logged"] = [_log_summary(e) for e in audit.read_entries()[before:]]
+
+                if scenario.get("appeal") and result.get("content_id"):
+                    result["appeal"] = send_appeal(requests, args, result["content_id"])
+                results.append(result)
+
+            if scenario.get("appeal"):
+                # The other direction: an id that was never submitted.
+                results.append({"sent": "appeal with a made-up content_id",
+                                "appeal": send_appeal(requests, args, FAKE_CONTENT_ID)})
 
             trials.append(results)
             guesses = [r.get("guess") or "—" for r in results]
