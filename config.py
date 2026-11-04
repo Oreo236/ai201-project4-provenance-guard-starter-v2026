@@ -92,16 +92,17 @@ AI_THRESHOLD = 0.65
 
 
 # ─── Rate limiting (UNIT 8) ──────────────────────────────────────────────────
-# Off in unit 7. You turn it on and choose the numbers in unit 8, Milestone 1.
+# On from unit 8, Milestone 1. Counted per creator_id, falling back to the
+# caller's address when there isn't one (see `app.py::rate_limit_key`).
 #
-# Think about two people: a real writer submitting their own work a few times
-# an hour, and a script sending a thousand variations to map your thresholds.
-# Your README has to say why your numbers and not others.
+# A writer revising and resubmitting their own piece won't send 5 in a minute
+# or 50 in a day. A script mapping the thresholds needs hundreds of variations,
+# so 50 a day per caller slows it to a crawl. AI201_RATE_LIMITS=0 turns it off.
 
-RATE_LIMITING_ENABLED = os.getenv("AI201_RATE_LIMITS", "0") == "1"
+RATE_LIMITING_ENABLED = os.getenv("AI201_RATE_LIMITS", "1") == "1"
 
-RATE_LIMIT_PER_MINUTE = 10
-RATE_LIMIT_PER_DAY = 200
+RATE_LIMIT_PER_MINUTE = 5
+RATE_LIMIT_PER_DAY = 50
 
 # Flask-Limiter warns loudly without this. In-memory is right for one laptop
 # and wrong for anything real — a restart forgets every count, and two copies

@@ -375,24 +375,42 @@ Every one of these also leaves a `rejected` entry in the audit log.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day, on `POST /submit` (`config.py`,
+applied by the `@limiter.limit(...)` decorator on `app.py::submit`).
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+A real writer submits a piece, maybe revises it and submits again. Even
+someone fixing typos and resubmitting won't send 5 in one minute, and 50 in a
+day is far more than anyone checking their own work needs. A script trying to
+map my thresholds has to send hundreds of small variations of the same text and
+watch where the label flips. At 50 a day per caller, that takes days instead of
+minutes. 10 a minute and 200 a day (the starter's numbers) would let a script
+roughly map the 0.35 and 0.65 cut-offs in one afternoon. Going lower than 5 a
+minute starts catching a real writer who hits submit, spots a mistake and
+submits again.
+
+**What a caller counts as:** The `creator_id` in the request, falling back to
+the caller's address when there isn't a usable one
+(`app.py::rate_limit_key`). The weakness is that `creator_id` is whatever the
+caller says it is, so a script that makes up a new id for every request is
+never limited at all. That's exactly what the attack set does, since every row
+submits as its own `attacker_<id>`. Limiting by address instead would stop that
+script, but would lump everyone behind one school or library network into one
+caller. Neither is right without real accounts.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
+`python run_attacks.py --flood 15` → `results/flood_2026-11-04_1747.md`
 
 ```
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+```
 
+Each of the ten 429s left a `rejected` entry in the audit log:
+
+```json
+{"creator_id": "flood_tester", "event": "rejected", "limit": "5 per 1 minute", "reason": "rate_limited", "status": "rejected", "timestamp": "2026-11-04T22:47:47+00:00"}
 ```
 
 ---
